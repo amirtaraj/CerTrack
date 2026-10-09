@@ -32,6 +32,17 @@ app.use(helmet({
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 
+if (process.env.VERCEL) {
+  app.use(async (req, res, next) => {
+    try {
+      await initializeDatabase();
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
+}
+
 app.get('/api/health', (req, res) => res.json({ ok: true, db: mongoose.connection.readyState === 1 }));
 app.use('/api/auth', authRoutes);
 app.use('/api/me', requireAuth, requirePasswordSet, meRoutes);
@@ -72,11 +83,25 @@ async function ensureAdmin() {
   console.log(`Created admin ${config.adminEmpId}. They'll set a new password at first sign-in.`);
 }
 
+let databaseInitialization;
+function initializeDatabase() {
+  if (!databaseInitialization) {
+    databaseInitialization = (async () => {
+      await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 8000 });
+      await Promise.all([User.init(), Certification.init()]);
+      await ensureAdmin();
+    })().catch((error) => {
+      databaseInitialization = undefined;
+      throw error;
+    });
+  }
+  return databaseInitialization;
+}
+
 export { app };
+export default app;
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 8000 });
-  await Promise.all([User.init(), Certification.init()]); // make sure unique indexes exist before serving
-  await ensureAdmin();
+  await initializeDatabase();
   app.listen(config.port, () => console.log(`Certification tracker on http://localhost:${config.port}`));
 }

@@ -1,0 +1,20 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes: [mongo-data:/data/db]
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on: [mongo]
+    ports: ["4000:4000"]
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/certtracker
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET (openssl rand -hex 32)}
+      ADMIN_EMP_ID: ${ADMIN_EMP_ID:-1000}
+      ADMIN_NAME: ${ADMIN_NAME:-Certification Admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD}
+      DEFAULT_PASSWORD: ${DEFAULT_PASSWORD:-Welcome@123}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+volumes:
+  mongo-data:
